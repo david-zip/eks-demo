@@ -1,0 +1,20 @@
+{
+  "name": "eks-demo-hello-world",
+  "version": "1.0.0",
+  "description": "Simple Hello World app for EKS Demo",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "keywords": [
+    "eks",
+    "demo",
+    "kubernetes"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+
