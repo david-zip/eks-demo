@@ -7,7 +7,7 @@ This guide covers everything required to provision infrastructure with Terraform
 ## 0. Prerequisites (on Bastion)
 
 - Verify that AWS CLI and Docker are installed:
-  ```bash
+  ```bashterrte
   aws --version
   docker --version
   ```
@@ -286,11 +286,22 @@ This guide covers everything required to provision infrastructure with Terraform
   kubectl get pods -n demo -w
   ```
 
+- Scale range
+  ```
+  kubectl autoscale deployment hello-world \
+    --cpu-percent=60 \
+    --min=2 \
+    --max=6 \
+    -n demo
+  ```
+
 ---
 
 ## 14. Clean Up
 
 - Delete namespace:
+  - Remove pods, deployments, ReplicaSets, and services.
+  - Allow AWS to clean up associated load balancers and network interfaces.
   ```bash
   kubectl delete namespace demo
   ```
@@ -305,6 +316,39 @@ This guide covers everything required to provision infrastructure with Terraform
     Delete the `"finalizers"` line and run:
     ```bash
     kubectl replace --raw "/api/v1/namespaces/demo/finalize" -f ./tmp.json
+    ```
+
+- Drain nodes
+  ```
+  kubectl get nodes
+  kubectl drain <node-name> --ignore-daemonsets --delete-emptydir-data
+  ```
+
+  - mark nodes as unschedulable
+    ```
+    kubectl cordon <node-name>
+    ```
+- Delete nodes
+  ```
+  kubectl delete node <node-name>
+  ```
+
+- Check if cluster level resources still exist
+  ```
+  kubectl get ingress -A
+  kubectl get svc -A
+  kubectl get pv
+  kubectl get pvc
+  kubectl get hpa -A
+  ```
+
+  - Delete if still
+    ```
+    kubectl delete ingress --all -A
+    kubectl delete svc --all -A
+    kubectl delete pv --all
+    kubectl delete pvc --all
+    kubectl delete hpa --all -A
     ```
 
 - Destroy Terraform infrastructure:
