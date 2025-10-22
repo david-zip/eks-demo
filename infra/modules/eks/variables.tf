@@ -53,6 +53,12 @@ variable "node_instance_types" {
   default     = ["t3.small"]
 }
 
+variable "bastion_role_arn" {
+  description = "IAM role ARN of the bastion host (for kubectl access)"
+  type        = string
+  default     = ""
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

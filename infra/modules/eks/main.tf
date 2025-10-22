@@ -37,7 +37,7 @@ resource "aws_eks_cluster" "main" {
     subnet_ids              = var.private_subnet_ids
     security_group_ids      = [var.cluster_security_group_id]
     endpoint_private_access = true
-    endpoint_public_access  = true
+    endpoint_public_access  = false
   }
 
   tags = var.tags
@@ -378,5 +378,29 @@ resource "aws_iam_policy" "aws_load_balancer_controller" {
 resource "aws_iam_role_policy_attachment" "aws_load_balancer_controller" {
   policy_arn = aws_iam_policy.aws_load_balancer_controller.arn
   role       = aws_iam_role.aws_load_balancer_controller.name
+}
+
+# EKS Access Entry for Bastion (allows bastion to use kubectl)
+resource "aws_eks_access_entry" "bastion" {
+  count         = var.bastion_role_arn != "" ? 1 : 0
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = var.bastion_role_arn
+  type          = "STANDARD"
+
+  tags = var.tags
+}
+
+# Grant cluster admin access to bastion
+resource "aws_eks_access_policy_association" "bastion_admin" {
+  count         = var.bastion_role_arn != "" ? 1 : 0
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = var.bastion_role_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.bastion]
 }
 

@@ -38,14 +38,15 @@ module "bastion" {
   environment         = var.environment
   vpc_id              = module.network.vpc_id
   public_subnet_id    = module.network.public_subnet_ids[0]
-  cluster_name        = module.eks.cluster_name
+  bastion_sg_id       = module.network.bastion_security_group_id
+  cluster_name        = "${var.project_name}-${var.environment}"
   aws_region          = var.aws_region
   instance_type       = var.bastion_instance_type
   key_name            = var.bastion_key_name
   allowed_cidr_blocks = var.bastion_allowed_cidrs
   tags                = var.tags
 
-  depends_on = [module.eks]
+  depends_on = [module.network]
 }
 
 # ECR Repository for Hello World App

@@ -15,7 +15,7 @@ output "private_ip" {
 
 output "security_group_id" {
   description = "Security group ID of the bastion host"
-  value       = aws_security_group.bastion.id
+  value       = var.bastion_sg_id
 }
 
 output "iam_role_arn" {

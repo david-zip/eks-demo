@@ -520,7 +520,7 @@ terraform destroy
 
 1. **Destroy when not in use**: Run `terraform destroy` after demos
 2. **Use Spot Instances**: Already configured (60-70% savings)
-3. **Single AZ**: Avoids cross-AZ data transfer costs
+3. **2 AZs (minimum for EKS)**: Required by AWS, but single NAT Gateway minimizes costs
 4. **Right-size nodes**: t3.small is adequate for demos
 5. **Minimal node count**: 2 nodes provide HA for demo
 6. **ECR lifecycle policy**: Automatically removes old images

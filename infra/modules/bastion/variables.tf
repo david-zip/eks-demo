@@ -18,6 +18,11 @@ variable "public_subnet_id" {
   type        = string
 }
 
+variable "bastion_sg_id" {
+  description = "Security group ID for bastion (created in network module)"
+  type        = string
+}
+
 variable "cluster_name" {
   description = "EKS cluster name"
   type        = string

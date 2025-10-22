@@ -40,6 +40,7 @@ resource "aws_iam_policy" "bastion_eks_access" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "EKSClusterAccess"
         Effect = "Allow"
         Action = [
           "eks:DescribeCluster",
@@ -47,21 +48,12 @@ resource "aws_iam_policy" "bastion_eks_access" {
           "eks:DescribeNodegroup",
           "eks:ListNodegroups",
           "eks:ListUpdates",
-          "eks:AccessKubernetesApi"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ecr:GetAuthorizationToken",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:PutImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload"
+          "eks:DescribeUpdate",
+          "eks:AccessKubernetesApi",
+          "eks:ListFargateProfiles",
+          "eks:DescribeFargateProfile",
+          "eks:ListAddons",
+          "eks:DescribeAddon"
         ]
         Resource = "*"
       }
@@ -71,9 +63,89 @@ resource "aws_iam_policy" "bastion_eks_access" {
   tags = var.tags
 }
 
-# Attach EKS access policy
+# IAM Policy for ECR Access (pull and push images)
+resource "aws_iam_policy" "bastion_ecr_access" {
+  name = "${var.project_name}-${var.environment}-bastion-ecr-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECRAuthentication"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECRRepositoryAccess"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeRepositories",
+          "ecr:ListImages",
+          "ecr:DescribeImages",
+          "ecr:GetRepositoryPolicy"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+# IAM Policy for EC2 Read-Only Access (troubleshooting)
+resource "aws_iam_policy" "bastion_ec2_readonly" {
+  name = "${var.project_name}-${var.environment}-bastion-ec2-readonly-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EC2ReadOnlyAccess"
+        Effect = "Allow"
+        Action = [
+          "ec2:Describe*",
+          "ec2:Get*",
+          "elasticloadbalancing:Describe*",
+          "autoscaling:Describe*",
+          "cloudwatch:ListMetrics",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:Describe*",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+# Attach policies to bastion role
 resource "aws_iam_role_policy_attachment" "bastion_eks_access" {
   policy_arn = aws_iam_policy.bastion_eks_access.arn
+  role       = aws_iam_role.bastion.name
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_ecr_access" {
+  policy_arn = aws_iam_policy.bastion_ecr_access.arn
+  role       = aws_iam_role.bastion.name
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_ec2_readonly" {
+  policy_arn = aws_iam_policy.bastion_ec2_readonly.arn
   role       = aws_iam_role.bastion.name
 }
 
@@ -91,37 +163,8 @@ resource "aws_iam_instance_profile" "bastion" {
   tags = var.tags
 }
 
-# Security Group for Bastion
-resource "aws_security_group" "bastion" {
-  name        = "${var.project_name}-${var.environment}-bastion-sg"
-  description = "Security group for bastion host"
-  vpc_id      = var.vpc_id
-
-  # SSH access
-  ingress {
-    description = "SSH from allowed IPs"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidr_blocks
-  }
-
-  # Outbound internet access
-  egress {
-    description = "Allow all outbound"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "${var.project_name}-${var.environment}-bastion-sg"
-    }
-  )
-}
+# Note: Bastion security group is now created in the network module
+# to avoid circular dependencies with EKS cluster security group rules
 
 # User Data Script to bootstrap the instance
 locals {
@@ -136,9 +179,15 @@ locals {
     dnf install -y git curl wget unzip docker
     
     # Install kubectl
+    echo "Installing kubectl..."
+    cd /tmp
     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-    rm kubectl
+    chmod +x kubectl
+    sudo mv kubectl /usr/local/bin/
+    
+    # Verify kubectl installation
+    kubectl version --client
+    echo "kubectl installed successfully: $(kubectl version --client --short 2>/dev/null || kubectl version --client)"
     
     # Install helm
     curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -146,16 +195,22 @@ locals {
     # Install AWS CLI v2
     curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
     unzip -q awscliv2.zip
-    ./aws/install
+    sudo ./aws/install
     rm -rf aws awscliv2.zip
     
     # Start and enable Docker
-    systemctl start docker
-    systemctl enable docker
-    usermod -aG docker ec2-user
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -aG docker ec2-user
     
     # Configure kubectl for EKS
-    aws eks update-kubeconfig --region $(ec2-metadata --availability-zone | sed 's/[a-z]$//' | cut -d' ' -f2) --name ${var.cluster_name}
+    echo "Configuring kubectl for EKS cluster: ${var.cluster_name}..."
+    REGION=$(ec2-metadata --availability-zone | sed 's/[a-z]$//' | cut -d' ' -f2)
+    aws eks update-kubeconfig --region $REGION --name ${var.cluster_name}
+    
+    # Test kubectl connection
+    echo "Testing kubectl connection..."
+    kubectl get nodes || echo "kubectl configured but cluster not yet accessible (this is normal during initial setup)"
     
     # Create a helper script for ec2-user
     cat > /home/ec2-user/setup-eks.sh << 'SCRIPT'
@@ -194,9 +249,34 @@ locals {
     MOTD
     
     # Run setup for ec2-user
-    sudo -u ec2-user aws eks update-kubeconfig --region $(ec2-metadata --availability-zone | sed 's/[a-z]$//' | cut -d' ' -f2) --name ${var.cluster_name} || true
+    echo "Configuring kubectl for ec2-user..."
+    REGION=$(ec2-metadata --availability-zone | sed 's/[a-z]$//' | cut -d' ' -f2)
+    sudo -u ec2-user aws eks update-kubeconfig --region $REGION --name ${var.cluster_name} || true
     
-    echo "Bastion host setup complete!" > /var/log/user-data-complete.log
+    # Create a verification script
+    cat > /home/ec2-user/verify-tools.sh << 'VERIFY'
+    #!/bin/bash
+    echo "=========================================="
+    echo "Tool Verification"
+    echo "=========================================="
+    echo "kubectl version: $(kubectl version --client --short 2>/dev/null || kubectl version --client | head -1)"
+    echo "helm version: $(helm version --short)"
+    echo "aws-cli version: $(aws --version)"
+    echo "docker version: $(docker --version)"
+    echo "git version: $(git --version)"
+    echo "=========================================="
+    echo "kubectl config: $(kubectl config view --minify -o jsonpath='{.clusters[0].name}' 2>/dev/null || echo 'Not configured')"
+    echo "=========================================="
+    VERIFY
+    
+    chmod +x /home/ec2-user/verify-tools.sh
+    chown ec2-user:ec2-user /home/ec2-user/verify-tools.sh
+    
+    # Log completion
+    echo "Bastion host setup complete at $(date)" | tee /var/log/user-data-complete.log
+    
+    # Run verification
+    sudo -u ec2-user /home/ec2-user/verify-tools.sh | tee -a /var/log/user-data-complete.log
   EOF
 }
 
@@ -205,7 +285,7 @@ resource "aws_instance" "bastion" {
   ami                    = data.aws_ami.amazon_linux_2023.id
   instance_type          = var.instance_type
   subnet_id              = var.public_subnet_id
-  vpc_security_group_ids = [aws_security_group.bastion.id]
+  vpc_security_group_ids = [var.bastion_sg_id]
   iam_instance_profile   = aws_iam_instance_profile.bastion.name
   key_name               = var.key_name != "" ? var.key_name : null
   

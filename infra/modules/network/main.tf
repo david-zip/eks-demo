@@ -270,3 +270,44 @@ resource "aws_security_group_rule" "nodes_alb_inbound" {
   source_security_group_id = aws_security_group.alb.id
 }
 
+# Security Group for Bastion
+resource "aws_security_group" "bastion" {
+  name        = "${var.project_name}-${var.environment}-bastion-sg"
+  description = "Security group for bastion host"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description = "SSH from anywhere (use SSM instead for better security)"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "${var.project_name}-${var.environment}-bastion-sg"
+    }
+  )
+}
+
+# Allow bastion to communicate with EKS cluster API
+resource "aws_security_group_rule" "cluster_bastion_inbound" {
+  description              = "Allow bastion to communicate with EKS cluster API"
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_cluster.id
+  source_security_group_id = aws_security_group.bastion.id
+}
+
