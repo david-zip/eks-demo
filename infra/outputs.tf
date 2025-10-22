@@ -4,14 +4,19 @@ output "vpc_id" {
   value       = module.network.vpc_id
 }
 
-output "public_subnet_id" {
-  description = "Public subnet ID"
-  value       = module.network.public_subnet_id
+output "public_subnet_ids" {
+  description = "Public subnet IDs"
+  value       = module.network.public_subnet_ids
 }
 
-output "private_subnet_id" {
-  description = "Private subnet ID"
-  value       = module.network.private_subnet_id
+output "private_subnet_ids" {
+  description = "Private subnet IDs"
+  value       = module.network.private_subnet_ids
+}
+
+output "availability_zones" {
+  description = "Availability zones used"
+  value       = module.network.availability_zones
 }
 
 # EKS Outputs
@@ -66,5 +71,21 @@ output "configure_kubectl" {
 output "ecr_login" {
   description = "Command to login to ECR"
   value       = "aws ecr get-login-password --region ${var.aws_region} | docker login --username AWS --password-stdin ${aws_ecr_repository.hello_world.repository_url}"
+}
+
+# Bastion Outputs
+output "bastion_public_ip" {
+  description = "Public IP of the bastion host"
+  value       = module.bastion.public_ip
+}
+
+output "bastion_connection_ssh" {
+  description = "SSH command to connect to bastion"
+  value       = module.bastion.ssh_command
+}
+
+output "bastion_connection_ssm" {
+  description = "SSM command to connect to bastion (no SSH key needed)"
+  value       = module.bastion.ssm_command
 }
 

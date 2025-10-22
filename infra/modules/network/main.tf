@@ -24,33 +24,35 @@ resource "aws_internet_gateway" "main" {
   )
 }
 
-# Public Subnet
+# Public Subnets (one per AZ)
 resource "aws_subnet" "public" {
+  count                   = length(var.availability_zones)
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = var.availability_zone
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
 
   tags = merge(
     var.tags,
     {
-      Name                                           = "${var.project_name}-${var.environment}-public-subnet"
+      Name                                           = "${var.project_name}-${var.environment}-public-subnet-${var.availability_zones[count.index]}"
       "kubernetes.io/role/elb"                       = "1"
       "kubernetes.io/cluster/${var.project_name}-${var.environment}" = "shared"
     }
   )
 }
 
-# Private Subnet
+# Private Subnets (one per AZ)
 resource "aws_subnet" "private" {
+  count             = length(var.availability_zones)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidr
-  availability_zone = var.availability_zone
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = var.availability_zones[count.index]
 
   tags = merge(
     var.tags,
     {
-      Name                                           = "${var.project_name}-${var.environment}-private-subnet"
+      Name                                           = "${var.project_name}-${var.environment}-private-subnet-${var.availability_zones[count.index]}"
       "kubernetes.io/role/internal-elb"              = "1"
       "kubernetes.io/cluster/${var.project_name}-${var.environment}" = "shared"
     }
@@ -71,15 +73,15 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.main]
 }
 
-# NAT Gateway
+# NAT Gateway (single NAT in first AZ for cost optimization)
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
+  subnet_id     = aws_subnet.public[0].id
 
   tags = merge(
     var.tags,
     {
-      Name = "${var.project_name}-${var.environment}-nat"
+      Name = "${var.project_name}-${var.environment}-nat-${var.availability_zones[0]}"
     }
   )
 
@@ -122,12 +124,14 @@ resource "aws_route_table" "private" {
 
 # Route Table Associations
 resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
+  count          = length(var.availability_zones)
+  subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private" {
-  subnet_id      = aws_subnet.private.id
+  count          = length(var.availability_zones)
+  subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id
 }
 
