@@ -16,10 +16,10 @@ spec:
         app: hello-world
     spec:
       containers:
-      - name: hello-world
-        image: <AWS_ACCOUNT_ID>.dkr.ecr.eu-west-1.amazonaws.com/eks-demo-hello-world:latest
+      - name: eks-demo-app
+        image: 116961718874.dkr.ecr.eu-west-1.amazonaws.com/eks-demo-hello-world:latest
         ports:
-        - containerPort: 3000
+          - containerPort: 3000
           name: http
           protocol: TCP
         env:
