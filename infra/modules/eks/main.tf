@@ -16,6 +16,11 @@ resource "aws_iam_role" "cluster" {
   tags = var.tags
 }
 
+resource "aws_iam_role_policy_attachment" "TEMP_POLICY" {
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+  role       = aws_iam_role.cluster.name
+}
+
 # Attach required policies to cluster role
 resource "aws_iam_role_policy_attachment" "cluster_AmazonEKSClusterPolicy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
